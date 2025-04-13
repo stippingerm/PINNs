@@ -5,7 +5,8 @@
 import sys
 sys.path.insert(0, '../../Utilities/')
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+import tensorflow_probability as tfp
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io
@@ -20,9 +21,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 np.random.seed(1234)
 tf.set_random_seed(1234)
+tf.disable_eager_execution()
+tf.disable_v2_behavior()
 
 
-class PhysicsInformedNN:
+class PhysicsInformedNN(object):
     # Initialize the class
     def __init__(self, x0, u0, v0, tb, X_f, layers, lb, ub):
         
@@ -52,7 +55,7 @@ class PhysicsInformedNN:
         self.layers = layers
         self.weights, self.biases = self.initialize_NN(layers)
         
-        # tf Placeholders        
+        # tf Placeholders
         self.x0_tf = tf.placeholder(tf.float32, shape=[None, self.x0.shape[1]])
         self.t0_tf = tf.placeholder(tf.float32, shape=[None, self.t0.shape[1]])
         
@@ -85,13 +88,8 @@ class PhysicsInformedNN:
                     tf.reduce_mean(tf.square(self.f_v_pred))
         
         # Optimizers
-        self.optimizer = tf.contrib.opt.ScipyOptimizerInterface(self.loss, 
-                                                                method = 'L-BFGS-B', 
-                                                                options = {'maxiter': 50000,
-                                                                           'maxfun': 50000,
-                                                                           'maxcor': 50,
-                                                                           'maxls': 50,
-                                                                           'ftol' : 1.0 * np.finfo(float).eps})
+        #self.optimizer = scipy.optimize.minimize(fun=func, x0=init_params, jac=True, method='BFGS')(self.loss, 
+        #                                                    max_iterations = 50000)
     
         self.optimizer_Adam = tf.train.AdamOptimizer()
         self.train_op_Adam = self.optimizer_Adam.minimize(self.loss)
@@ -118,8 +116,9 @@ class PhysicsInformedNN:
         in_dim = size[0]
         out_dim = size[1]        
         xavier_stddev = np.sqrt(2/(in_dim + out_dim))
-        return tf.Variable(tf.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
-    
+        return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev), dtype=tf.float32)
+
+    @tf.function
     def neural_net(self, X, weights, biases):
         num_layers = len(weights) + 1
         
@@ -132,7 +131,8 @@ class PhysicsInformedNN:
         b = biases[-1]
         Y = tf.add(tf.matmul(H, W), b)
         return Y
-    
+
+    @tf.function
     def net_uv(self, x, t):
         X = tf.concat([x,t],1)
         
