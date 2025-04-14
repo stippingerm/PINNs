@@ -88,8 +88,21 @@ class PhysicsInformedNN(object):
                     tf.reduce_mean(tf.square(self.f_v_pred))
         
         # Optimizers
-        #self.optimizer = scipy.optimize.minimize(fun=func, x0=init_params, jac=True, method='BFGS')(self.loss, 
-        #                                                    max_iterations = 50000)
+        # Note: this ScipyOptimizerInterface was removed in TF2.
+        # It provided a way to operate the optimizer on a tf session, without explicitly providing variables and starting point.
+        # Internet suggested alternatives that did not really work:
+        # * https://stackoverflow.com/questions/67375178/whats-the-replacement-for-scipyoptimizerinterface-in-tensorflow-2
+        #   tfp.optimizer.nelder_mead_minimize and tfp.optimizer.lbfgs_minimize work with a different signature
+        # * https://pypi.org/project/kormos/ cannot import 'traceback_utils' from 'keras.utils'
+        # * https://stackoverflow.com/questions/59029854/use-scipy-optimizer-with-tensorflow-2-0-for-neural-network-training
+        #   suggests code rewrite or https://pypi.org/project/autograd-minimize/ which again has not the same signature
+        # self.optimizer = tf.contrib.opt.ScipyOptimizerInterface(self.loss, 
+        #                                                         method = 'L-BFGS-B', 
+        #                                                         options = {'maxiter': 50000,
+        #                                                                    'maxfun': 50000,
+        #                                                                    'maxcor': 50,
+        #                                                                    'maxls': 50,
+        #                                                                    'ftol' : 1.0 * np.finfo(float).eps})     
     
         self.optimizer_Adam = tf.train.AdamOptimizer()
         self.train_op_Adam = self.optimizer_Adam.minimize(self.loss)
@@ -207,13 +220,15 @@ if __name__ == "__main__":
      
     noise = 0.0        
     
-    # Doman bounds
+    # Domain bounds: lower and upper, direction x and t
     lb = np.array([-5.0, 0.0])
     ub = np.array([5.0, np.pi/2])
 
-    N0 = 50
-    N_b = 50
-    N_f = 20000
+    N0 = 50  # initial
+    N_b = 50  # boundary
+    N_f = 20000  # soultion
+
+    # input domain (x, t), output complex-valued (u, v)
     layers = [2, 100, 100, 100, 100, 2]
         
     data = scipy.io.loadmat('../Data/NLS.mat')
@@ -242,7 +257,7 @@ if __name__ == "__main__":
     idx_t = np.random.choice(t.shape[0], N_b, replace=False)
     tb = t[idx_t,:]
     
-    X_f = lb + (ub-lb)*lhs(2, N_f)
+    X_f = lb + (ub-lb)*lhs(2, N_f)  # Latin-Hypercube 
             
     model = PhysicsInformedNN(x0, u0, v0, tb, X_f, layers, lb, ub)
              
